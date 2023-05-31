@@ -1,3 +1,7 @@
+# Modified version of svox2 for Sin3DGen
+- we add the new config in `opt/configs/syn_start_from_12` to support more levels of training.
+- modify the `opt/opt.py` to save ckpts at each level during training.
+
 # Plenoxels: Radiance Fields without Neural Networks
 
 Alex Yu\*, Sara Fridovich-Keil\*, Matthew Tancik, Qinhong Chen, Benjamin Recht, Angjoo Kanazawa

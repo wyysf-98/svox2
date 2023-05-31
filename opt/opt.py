@@ -48,7 +48,7 @@ group.add_argument('--reso',
                             'stays at the last one; ' +
                             'should be a list where each item is a list of 3 ints or an int')
 group.add_argument('--upsamp_every', type=int, default=
-                     3 * 12800,
+                     2 * 12800,
                     help='upsample the grid every x iters')
 group.add_argument('--init_iters', type=int, default=
                      0,
@@ -76,7 +76,7 @@ group.add_argument('--background_reso', type=int, default=512, help='Background 
 
 
 group = parser.add_argument_group("optimization")
-group.add_argument('--n_iters', type=int, default=10 * 12800, help='total number of iters to optimize for')
+group.add_argument('--n_iters', type=int, default=30 * 12800, help='total number of iters to optimize for')
 group.add_argument('--batch_size', type=int, default=
                      5000,
                      #100000,
@@ -158,7 +158,7 @@ group.add_argument('--init_sigma_bg', type=float,
 
 # Extra logging
 group.add_argument('--log_mse_image', action='store_true', default=False)
-group.add_argument('--log_depth_map', action='store_true', default=False)
+group.add_argument('--log_depth_map', action='store_true', default=True)
 group.add_argument('--log_depth_map_use_thresh', type=float, default=None,
         help="If specified, uses the Dex-neRF version of depth with given thresh; else returns expected term")
 
@@ -282,6 +282,20 @@ dset_test = datasets[args.dataset_type](
 
 global_start_time = datetime.now()
 
+# args.nosphereinit = True
+# grid = svox2.SparseGrid(reso=reso_list[reso_id],
+#                         center=dset.scene_center,
+#                         radius=[1.0, 1.0, 0.25],
+#                         use_sphere_bound=dset.use_sphere_bound and not args.nosphereinit,
+#                         basis_dim=args.sh_dim,
+#                         use_z_order=True,
+#                         device=device,
+#                         basis_reso=args.basis_reso,
+#                         basis_type=svox2.__dict__['BASIS_TYPE_' + args.basis_type.upper()],
+#                         mlp_posenc_size=args.mlp_posenc_size,
+#                         mlp_width=args.mlp_width,
+#                         background_nlayers=args.background_nlayers,
+#                         background_reso=args.background_reso)
 grid = svox2.SparseGrid(reso=reso_list[reso_id],
                         center=dset.scene_center,
                         radius=dset.scene_radius,
@@ -390,7 +404,8 @@ while True:
             #             44, 45, 47, 49, 56,
             #             80, 88, 99, 115, 120,
             #             154]
-            #  img_save_interval = 1
+            # img_save_interval = 5 if img_save_interval == 0 else img_save_interval
+            img_save_interval = 2
 
             n_images_gen = 0
             for i, img_id in tqdm(enumerate(img_ids), total=len(img_ids)):
@@ -516,7 +531,7 @@ while True:
                 pbar.set_description(f'epoch {epoch_id} psnr={psnr:.2f}')
                 for stat_name in stats:
                     stat_val = stats[stat_name] / args.print_every
-                    summary_writer.add_scalar(stat_name, stat_val, global_step=gstep_id)
+                    # summary_writer.add_scalar(stat_name, stat_val, global_step=gstep_id)
                     stats[stat_name] = 0.0
                 #  if args.lambda_tv > 0.0:
                 #      with torch.no_grad():
@@ -528,13 +543,13 @@ while True:
                 #      summary_writer.add_scalar("loss_tv_sh", tv_sh, global_step=gstep_id)
                 #  with torch.no_grad():
                 #      tv_basis = grid.tv_basis() #  summary_writer.add_scalar("loss_tv_basis", tv_basis, global_step=gstep_id)
-                summary_writer.add_scalar("lr_sh", lr_sh, global_step=gstep_id)
-                summary_writer.add_scalar("lr_sigma", lr_sigma, global_step=gstep_id)
-                if grid.basis_type == svox2.BASIS_TYPE_3D_TEXTURE:
-                    summary_writer.add_scalar("lr_basis", lr_basis, global_step=gstep_id)
-                if grid.use_background:
-                    summary_writer.add_scalar("lr_sigma_bg", lr_sigma_bg, global_step=gstep_id)
-                    summary_writer.add_scalar("lr_color_bg", lr_color_bg, global_step=gstep_id)
+                # summary_writer.add_scalar("lr_sh", lr_sh, global_step=gstep_id)
+                # summary_writer.add_scalar("lr_sigma", lr_sigma, global_step=gstep_id)
+                # if grid.basis_type == svox2.BASIS_TYPE_3D_TEXTURE:
+                #     summary_writer.add_scalar("lr_basis", lr_basis, global_step=gstep_id)
+                # if grid.use_background:
+                #     summary_writer.add_scalar("lr_sigma_bg", lr_sigma_bg, global_step=gstep_id)
+                #     summary_writer.add_scalar("lr_color_bg", lr_color_bg, global_step=gstep_id)
 
                 if args.weight_decay_sh < 1.0:
                     grid.sh_data.data *= args.weight_decay_sigma
@@ -628,6 +643,8 @@ while True:
             reso_id += 1
             use_sparsify = True
             z_reso = reso_list[reso_id] if isinstance(reso_list[reso_id], int) else reso_list[reso_id][2]
+            
+            grid.save(ckpt_path.replace('.npz', f"_reso{'_'.join(str(i) for i in reso_list[reso_id-1])}.npz"))
             grid.resample(reso=reso_list[reso_id],
                     sigma_thresh=args.density_thresh,
                     weight_thresh=args.weight_thresh / z_reso if use_sparsify else 0.0,
@@ -655,5 +672,5 @@ while True:
         timings_file = open(os.path.join(args.train_dir, 'time_mins.txt'), 'a')
         timings_file.write(f"{secs / 60}\n")
         if not args.tune_nosave:
-            grid.save(ckpt_path)
+            grid.save(ckpt_path.replace('.npz', f"_reso{'_'.join(str(i) for i in reso_list[-1])}.npz"))
         break
